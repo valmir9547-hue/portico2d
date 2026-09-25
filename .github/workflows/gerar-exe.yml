@@ -1,0 +1,53 @@
+# .github/workflows/gerar-exe.yml
+# Gera o Portico2D.exe em um Windows do GitHub e disponibiliza para download.
+# Disparo: manual (aba Actions → "Gerar EXE Portico2D" → Run workflow)
+#          ou automático a cada alteração nos arquivos .py.
+name: Gerar EXE Portico2D
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "**.py"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    env:
+      PYTHONIOENCODING: utf-8   # o console do Windows não aceita λ, ✔, ≤ sem isso
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar bibliotecas
+        run: |
+          python -m pip install --upgrade pip
+          pip install openseespy matplotlib numpy ezdxf pyinstaller
+
+      - name: Rodar os testes de regressão (se falhar, o EXE não é gerado)
+        run: python testes_portico2d.py
+
+      - name: Gerar o executável
+        run: >
+          pyinstaller portico2d_gui.py --name Portico2D --onedir --windowed --noconfirm
+          --collect-all openseespy --collect-all openseespywin --collect-all ezdxf
+          --hidden-import portico2d_core --hidden-import combinacoes_nbr8800
+          --hidden-import importar_dxf --hidden-import verificacao_nbr8800
+
+      - name: Testar se o EXE abre (importações e OpenSees)
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist/Portico2D/Portico2D.exe")) { throw "EXE não foi gerado" }
+          Get-ChildItem dist/Portico2D | Select-Object -First 20
+
+      - name: Publicar para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: Portico2D-windows
+          path: dist/Portico2D
+          retention-days: 30
